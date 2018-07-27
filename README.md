@@ -1,4 +1,4 @@
-A simple wrapper around Unity's new experimental Vector API, letting you draw as if you were inside a HTML5 canvas.
+A simple wrapper around Unity's new experimental Vector API, letting you draw as if you were inside a HTML5 canvas. Demonstrates basic fills, strokes and fill rules.
 
 For example:
 
