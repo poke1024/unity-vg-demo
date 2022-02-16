@@ -3,20 +3,26 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.VectorGraphics;
 
+
 public class Graphics : MonoBehaviour
 {
-    private Path m_Path;
+    //private Path m_Path;
     private Scene m_Scene;
     private VectorUtils.TessellationOptions m_Options;
 
     private Mesh m_mesh;
-
-    private float m_LineWidth = 1.0f;
+    public float PixelsPerUnit = 100;
+    private float m_LineWidth = 1f;
     private Color m_LineColor = Color.black;
+    private Color m_FillColor = Color.black;
     private IFill m_CurrentFill = new SolidFill() { Color = Color.white };
 
     private List<BezierPathSegment> m_Segments = new List<BezierPathSegment>();
     private List<BezierContour> m_Contours = new List<BezierContour>();
+
+    private Shape m_CurrentShape;
+
+
 
     public void SetLineColor(float r, float g, float b, float a = 1)
     {
@@ -25,20 +31,24 @@ public class Graphics : MonoBehaviour
 
     public float LineWidth
     {
-        get {
+        get
+        {
             return m_LineWidth;
         }
-        set {
-            m_LineWidth = value;
+        set
+        {
+            m_LineWidth = value / PixelsPerUnit;
         }
     }
 
     public IFill FillStyle
     {
-        get {
+        get
+        {
             return m_CurrentFill;
         }
-        set {
+        set
+        {
             m_CurrentFill = value;
         }
     }
@@ -46,6 +56,7 @@ public class Graphics : MonoBehaviour
     public void SetFillColor(float r, float g, float b, float a = 1)
     {
         m_CurrentFill = new SolidFill() { Color = new Color(r, g, b, a) };
+        m_FillColor = new Color(r, g, b, a);
     }
 
     private PathProperties NewPathProperties()
@@ -56,9 +67,11 @@ public class Graphics : MonoBehaviour
 
             return new PathProperties()
             {
-                Stroke = new Stroke() {
+                Stroke = new Stroke()
+                {
                     Color = m_LineColor,
-                    HalfThickness = v.magnitude / 2 }
+                    HalfThickness = m_LineWidth / 2//v.magnitude / 2
+                }
             };
         }
         else
@@ -91,51 +104,82 @@ public class Graphics : MonoBehaviour
         }
     }
 
+    void addFillAndStroke(Shape shape)
+    {
+        addFill(shape);
+        addStroke(shape);
+      
+       
+    }
+
+    void addFill(Shape shape)
+    {
+        shape.Fill = new SolidFill() { Color = m_FillColor };
+    }
+
+    void addStroke(Shape shape)
+    {
+        shape.PathProps = new PathProperties()
+        {
+            Stroke = new Stroke() { Color = m_LineColor }
+        };
+        if (shape.PathProps.Stroke.HalfThickness == 0)
+            shape.PathProps.Stroke.HalfThickness = m_LineWidth / 2;
+    }
+
+    void addToScene(Shape shape)
+    {
+       
+        m_Scene.Root.Shapes.Add(shape);//.Children.Add(node);
+        m_Contours.Clear();
+    }
+
     public void Rect(float x, float y, float w, float h)
     {
-        var rectangle = new Rectangle()
-        {
-            Position = LocalPoint(x, y),
-            Size = LocalPoint(x + w, y + h) - LocalPoint(x, y),
-            FillTransform = Matrix2D.identity
-        };
-        m_Scene.Root.Drawables.Add(rectangle);
+        m_CurrentShape = new Shape();
+        VectorUtils.MakeRectangleShape(m_CurrentShape, new Rect(x/PixelsPerUnit, y/PixelsPerUnit, w/PixelsPerUnit, h/PixelsPerUnit));
+        //addToScene(rectShape);
     }
 
     public void Circle(float x, float y, float r)
     {
-        m_Scene.Root.Drawables.Add(VectorUtils.MakeCircle(
-            LocalPoint(x, y),
-            (LocalPoint(x + r, y) - LocalPoint(x, y)).magnitude));
+        m_CurrentShape = new Shape();
+        VectorUtils.MakeCircleShape(m_CurrentShape, new Vector2(x/PixelsPerUnit, y/PixelsPerUnit), r/PixelsPerUnit);
+        addToScene(m_CurrentShape);
     }
+
 
     public void Ellipse(float x, float y, float rx, float ry)
     {
-        m_Scene.Root.Drawables.Add(VectorUtils.MakeEllipse(
-            LocalPoint(x, y),
-            (LocalPoint(x + rx, y) - LocalPoint(x, y)).magnitude,
-            (LocalPoint(x + ry, y) - LocalPoint(x, y)).magnitude));
+        m_CurrentShape = new Shape();
+        VectorUtils.MakeEllipseShape(m_CurrentShape, new Vector2(x/PixelsPerUnit, y/PixelsPerUnit), rx/PixelsPerUnit, ry/PixelsPerUnit);
+        
     }
 
 
-    public void MoveTo(float x, float y)
+    public void MoveTo(float x, float y, bool clearShape = true)
     {
+        if (clearShape)
+            m_CurrentShape = new Shape();
         m_Segments.Clear();
         m_Segments.Add(new BezierPathSegment()
         {
-            P0 = LocalPoint(x, y)
-        });
+            P0 = LocalPoint(x/PixelsPerUnit, y/PixelsPerUnit)//(x / PixelsPerUnit, y / PixelsPerUnit)
+        }) ;
     }
 
     public void LineTo(float x, float y)
     {
-        if (m_Segments.Count == 0) {
+       
+        if (m_Segments.Count == 0)
+        {
             MoveTo(x, y);
         }
         var n = m_Segments.Count;
 
         var a = m_Segments[n - 1].P0;
-        var b = LocalPoint(x, y);
+      
+        var b = LocalPoint(x/PixelsPerUnit, y/PixelsPerUnit);
         var line = VectorUtils.MakeLine(a, b);
 
         m_Segments[n - 1] = new BezierPathSegment()
@@ -160,9 +204,9 @@ public class Graphics : MonoBehaviour
         var n = m_Segments.Count;
 
         var a = m_Segments[n - 1].P0;
-        var b = LocalPoint(cx1, cy1);
-        var c = LocalPoint(cx2, cy2);
-        var d = LocalPoint(x, y);
+        var b = LocalPoint(cx1/PixelsPerUnit, cy1/PixelsPerUnit);
+        var c = LocalPoint(cx2/PixelsPerUnit, cy2/PixelsPerUnit);
+        var d = LocalPoint(x/PixelsPerUnit, y/PixelsPerUnit);
 
         m_Segments[n - 1] = new BezierPathSegment()
         {
@@ -179,73 +223,77 @@ public class Graphics : MonoBehaviour
 
     public void Arc(float x, float y, float r, float startAngle, float endAngle)
     {
-        var rWorld = (LocalPoint(x + r, y) - LocalPoint(x, y)).magnitude;
-        var segments = VectorUtils.MakeArc(LocalPoint(x, y), startAngle, endAngle - startAngle, rWorld);
-        foreach (var s in segments) {            
+        m_CurrentShape = new Shape();
+       // m_Segments.Clear();
+        var rWorld = (LocalPoint((x/PixelsPerUnit) + (r/PixelsPerUnit), (y/PixelsPerUnit)) - LocalPoint(x/PixelsPerUnit, y/PixelsPerUnit)).magnitude;
+        var segments = VectorUtils.MakeArc(LocalPoint(x / PixelsPerUnit, y / PixelsPerUnit), startAngle, endAngle - startAngle, rWorld);// rWorld/PixelsPerUnit);
+        foreach (var s in segments)
+        {
             m_Segments.Add(s);
         }
     }
 
     public void Fill()
     {
-        var drawables = m_Scene.Root.Drawables;
+        //var drawables = m_Scene.Root.Drawables;
 
-        CloseContour();
-        if (m_Contours.Count > 0)
-        {
-            drawables.Add(new Shape()
-            {
-                Contours = m_Contours.ToArray(),
-                Fill = m_CurrentFill
-            });
-            m_Contours.Clear();
-        }
-        else
-        {
-            var d = drawables[drawables.Count - 1];
-            if (d != null)
-            {
-                if (d is Filled)
-                {
-                    ((Filled)d).Fill = m_CurrentFill;
-                }
-            }
-        }
+         CloseContour();
+         if (m_Contours.Count > 0)
+         {
+            m_CurrentShape.Contours = m_Contours.ToArray();
+             m_Contours.Clear();
+            
+         }
+         else
+         {
+             /*var d = drawables[drawables.Count - 1];
+             if (d != null)
+             {
+                 if (d is Filled)
+                 {
+                     ((Filled)d).Fill = m_CurrentFill;
+                 }
+             }*/
+         }
+        addFill(m_CurrentShape);
+        addToScene(m_CurrentShape);
     }
 
     public void Stroke()
     {
-        var drawables = m_Scene.Root.Drawables;
-
         CloseContour();
         if (m_Contours.Count > 0)
         {
-            drawables.Add(new Shape()
-            {
-                Contours = m_Contours.ToArray(),
-                PathProps = NewPathProperties()
-            });
-            m_Contours.Clear();
+            m_CurrentShape.Contours = m_Contours.ToArray();
+            m_CurrentShape.PathProps = NewPathProperties(); 
         }
         else
         {
-            var d = drawables[drawables.Count - 1];
-            if (d != null)
-            {
-                if (d is Filled)
-                {
-                    ((Filled)d).PathProps = NewPathProperties();
-                }
-            }
+            /* var d = drawables[drawables.Count - 1];
+             if (d != null)
+             {
+                 if (d is Filled)
+                 {
+                     ((Filled)d).PathProps = NewPathProperties();
+                 }
+             }*/
         }
+
+
+        addStroke(m_CurrentShape);
+        addToScene(m_CurrentShape);
     }
 
     private void Awake()
     {
+        LineWidth = m_LineWidth; //to kick in the PPU
         m_Scene = new Scene()
         {
-           Root = new SceneNode() { Drawables = new List<IDrawable> { } }
+            Root = new SceneNode() { }
+
         };
+        m_Scene.Root.Children = new List<SceneNode>();
+        m_Scene.Root.Shapes = new List<Shape>();
 
         m_Options = new VectorUtils.TessellationOptions()
         {
@@ -269,20 +317,23 @@ public class Graphics : MonoBehaviour
 
     public void Begin()
     {
-        m_Scene.Root.Drawables.Clear();
+        // m_Scene.Root.Drawables.Clear();
+        m_mesh.Clear();
     }
 
     public void End()
     {
-        m_mesh.Clear();
+        //m_mesh.Clear();
         var geoms = VectorUtils.TessellateScene(m_Scene, m_Options);
         VectorUtils.FillMesh(m_mesh, geoms, 1.0f);
     }
 
     private Vector2 LocalPoint(float x, float y)
     {
-        var currentCamera = Camera.main;
-        var p = currentCamera.ScreenToWorldPoint(new Vector3(x, y));
-        return new Vector2(p.x, p.y);
+        // var currentCamera = Camera.main;
+        //var p = currentCamera.ScreenToWorldPoint(new Vector3(x, y));
+        return new Vector2(x, y);//(p.x, p.y);
     }
+
+
 }
